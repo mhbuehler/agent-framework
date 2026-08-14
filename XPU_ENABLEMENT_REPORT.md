@@ -11,7 +11,7 @@ validating existing local-service integrations on Intel GPU hardware.
 - **Ollama embeddings:** Complete. The embedding integration test passed with
   model and compute buffers allocated on the Intel GPU.
 - **Foundry Local:** Initial investigation of `microsoft/Foundry-Local` reveals
-  that its Intel GPU execution providers (OpenVINO via WinML, WebGPU via DX12) are
+  that its Intel GPU execution providers (OpenVINO, WebGPU) are
   Windows-only. There is no Linux Intel GPU path today. Probably out of scope.
 
 ## Repos Analyzed
@@ -89,15 +89,7 @@ framework code changes.
 
 **Status: COMPLETE.**
 
-| Component | Value |
-|---|---|
-| GPU | Intel Arc Pro B60 (BMG G21), 23.9 GiB discrete |
-| CPU | Intel Xeon 6980P, 237 GiB system RAM |
-| Compute backend | Vulkan (`OLLAMA_VULKAN=true`, `GGML_VK_VISIBLE_DEVICES=0`) |
-| Chat model | `qwen2.5:0.5b` — 25/25 layers on GPU |
-| Embedding model | `nomic-embed-text` — 216 MiB model + 92 MiB compute on GPU |
-| Chat result | 4 passed in 5.03s |
-| Embedding result | 1 passed |
+On an Intel Arc Pro B60 using Ollama's Vulkan backend, all five tests passed (four chat and one embedding). Logs confirmed full GPU offload and allocation.
 
 ### Smoke Test: Foundry Local on Intel GPU
 
