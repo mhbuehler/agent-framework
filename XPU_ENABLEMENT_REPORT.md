@@ -10,16 +10,16 @@ validating existing local-service integrations on Intel GPU hardware.
   Intel GPU offload and no framework changes.
 - **Ollama embeddings:** Complete. The embedding integration test passed with
   model and compute buffers allocated on the Intel GPU.
-- **Foundry Local:** Initial investigation of `microsoft/Foundry-Local` reveals
-  that its Intel GPU execution providers (OpenVINO, WebGPU) are
-  Windows-only. There is no Linux Intel GPU path today. Probably out of scope.
+- **Foundry Local:** Complete. Foundry Local CLI 0.10.3 detected four Intel Arc
+  Pro B60 GPUs on Linux and initialized successfully, but exposed only CPU
+  model variants. There is no supported Linux Intel GPU path today.
 
 ## Repos Analyzed
 
 | Repository | Role | Recommendation |
 |---|---|---|
 | [`microsoft/agent-framework`](https://github.com/microsoft/agent-framework) | Core framework: Python + .NET packages, provider clients, samples, tests | Ollama integration validated on Intel GPU; no framework changes needed |
-| [`microsoft/Foundry-Local`](https://github.com/microsoft/Foundry-Local) | External local-inference runtime consumed by `agent-framework-foundry-local` | No Linux Intel GPU path exists today; probably out of scope |
+| [`microsoft/Foundry-Local`](https://github.com/microsoft/Foundry-Local) | External local-inference runtime consumed by `agent-framework-foundry-local` | No Linux Intel GPU path exists today; out of scope |
 
 ## Testing
 
@@ -59,7 +59,7 @@ signal for configuration plumbing but do not prove XPU execution.
 |---|---|
 | Ollama chat completion on Intel GPU | **4/4 passing, GPU confirmed** (WW33) — zero framework changes |
 | Ollama embedding generation on Intel GPU | **1/1 passing, GPU confirmed** (WW33) — zero framework changes |
-| Foundry Local on Intel GPU | Not possible on Linux; Intel GPU execution providers are Windows-only |
+| Foundry Local on Intel GPU | **Smoke test complete; unsupported on Linux** — hardware detected, but no Intel-compatible GPU variants available |
 
 An XPU test must confirm that model computation uses the Intel GPU. A successful
 response alone is not sufficient; GPU offload must be independently observed.
@@ -69,11 +69,11 @@ response alone is not sufficient; GPU offload must be independently observed.
 | # | Contribution | Status | Acceptance criteria |
 |---|---|---|---|
 | E2E-1 | Validate Ollama chat and embedding integration tests against XPU-backed Ollama | **COMPLETE (WW33)** | 5/5 tests pass, GPU offload confirmed via container logs |
-| Smoke Test | Validate Foundry Local chat completion on Intel GPU hardware | Not started; now expected to fail based on code review | Correct response, confirmed Intel GPU use, no CPU fallback |
-| PR-1 | Document Intel GPU configuration and prerequisites for Foundry Local | Unlikely; depends on Smoke Test | Documentation reflects the proven device value, model variant, and execution provider |
-| PR-2 | Add configuration regression test for Intel GPU device selection in Foundry Local | Unlikely; depends on Smoke Test | Unit test proves the device value is forwarded correctly; configuration coverage, not hardware support |
-| PR-3 | Add opt-in Foundry Local integration tests and companion sample | Unlikely; depends on Smoke Test | Tests cover non-streaming, streaming, and tool-calling against a real `FoundryLocalClient` on Intel GPU |
-| Issue-1 | Open a tracking issue describing the Intel XPU enablement plan | Proposed | Issue triaged and linked from PRs |
+| Smoke Test | Validate Foundry Local on Intel GPU hardware | **COMPLETE — failed as expected** | Runtime initialized, GPUs detected, and GPU catalog queried; no compatible variants available |
+| PR-1 | Document Intel GPU configuration and prerequisites for Foundry Local | Not viable | No supported configuration exists on Linux |
+| PR-2 | Add configuration regression test for Intel GPU device selection in Foundry Local | Not viable | Device forwarding cannot provide missing runtime support |
+| PR-3 | Add opt-in Foundry Local integration tests and companion sample | Not viable | No Intel GPU variant is available to test |
+| Issue-1 | Request Linux Intel GPU support from Foundry Local | Optional upstream follow-up | Request accepted and tracked upstream |
 
 ## XPU Test Plan
 
@@ -95,32 +95,28 @@ On an Intel Arc Pro B60 using Ollama's Vulkan backend, all five tests passed (fo
 
 **Goal:** Confirm whether Foundry Local can run inference on Intel GPU on Linux.
 
-- Install Foundry Local runtime on the Intel GPU test host
-- Attempt to load a model with `DeviceType.GPU`
-- Observe whether the runtime selects the Intel discrete GPU or fails
+- Installed Foundry Local CLI 0.10.3 on Ubuntu 25.10 with four Intel Arc Pro B60 GPUs
+- Started the runtime and confirmed that it detected the Intel GPUs
+- Queried all GPU model variants with `foundry model list --device gpu --variants --verbose`
 
-**Expected outcome:** Failure. A code review of `microsoft/Foundry-Local` found
-that the runtime's Intel-capable GPU paths (OpenVINO EP via WinML, WebGPU EP via
-DX12) are both Windows-only. On Linux, only CPU and CUDA (NVIDIA) execution
-providers are available. The smoke test will confirm this empirically.
+**Result:** Failed as expected. The GPU catalog was empty, while the same runtime
+returned CPU variants using `CPUExecutionProvider`.
 
-**Status:** Not started.
+**Rationale:** Hardware detection does not enable inference by itself. Foundry
+Local also needs a compatible ONNX Runtime execution provider. Its OpenVINO path
+is provided through Windows-only WinML, WebGPU is not supported on Linux, and
+its Linux GPU path is CUDA for NVIDIA hardware. With no Intel-capable provider,
+there is no GPU model to run; an alias would select a CPU variant instead.
+
+**Status: COMPLETE.**
 
 ### Upstreaming
 
-All proposed PRs are tests, documentation, and sample code — expected to be a
-small amount of code changes. Whether to submit through OSPDT depends on whether
-the Foundry Local smoke test succeeds. E2E-1 (Ollama) required zero framework
-changes and zero upstream PRs. If Foundry Local does require changes, batching
-into one OSPDT submission keeps process cost low.
-
-Update: a code review of `microsoft/Foundry-Local` found that its Intel GPU
-execution providers are Windows-only, making the smoke test unlikely to succeed
-on Linux. The Foundry Local PRs may not be viable.
-
-- Submit documentation and configuration test justified by the smoke test (PR-1, PR-2)
-- Submit opt-in integration tests and companion sample (PR-3)
-- File an upstream request if Foundry Local cannot select Intel GPU
+No Agent Framework PR is warranted. Ollama already works without framework
+changes, while Foundry Local lacks Linux Intel GPU runtime support. The proposed
+documentation, configuration test, integration tests, and sample therefore do
+not justify OSPDT approval. An upstream Foundry Local enhancement request is a possible
+follow-up.
 
 ## Next Steps
 
@@ -132,9 +128,6 @@ on Linux. The Foundry Local PRs may not be viable.
 - [x] Confirm Intel GPU offload for both chat and embedding models
 - [x] Inspect `foundry-local-sdk` device enum: CPU, GPU, NPU present; XPU is not
 - [x] Review `microsoft/Foundry-Local` project for XPU support
-- [ ] Run the Foundry Local smoke test on Intel GPU hardware (now expected to fail)
-- [ ] Prepare PR-1 (documentation) if smoke test succeeds
-- [ ] Prepare PR-2 (configuration regression test) if smoke test succeeds
-- [ ] Prepare PR-3 (opt-in integration tests and companion sample)
-- [ ] Open Issue-1 describing the Intel XPU enablement plan
-- [ ] Follow up on PRs through review and merge
+- [x] Run the Foundry Local smoke test on Intel GPU hardware: **no GPU variants available**
+- [x] Conclude PR-1, PR-2, and PR-3 are not viable for Linux Intel GPU enablement
+- [ ] Optional: Request Linux Intel GPU support from Foundry Local upstream
